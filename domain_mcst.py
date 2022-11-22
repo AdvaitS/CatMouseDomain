@@ -1,9 +1,18 @@
 # MCTS Implementation
 import numpy as np
 
+EMPTY, CAT, MOUSE, WALL, TRAP, HOLE = list(range(6))
+SIZE = -1
+
 
 def state_string(state):
-    return "\n".join(["".join(row) for row in state])
+    state[state == str(EMPTY)] = "_"
+    state[state == str(CAT)] = "C"
+    state[state == str(MOUSE)] = "M"
+    state[state == str(WALL)] = "W"
+    state[state == str(TRAP)] = "T"
+    state[state == str(HOLE)] = "H"
+    return "\n".join(["  ".join(row) for row in state])
 
 
 def score(state):
@@ -16,7 +25,7 @@ def score(state):
 
 
 def get_player(state):
-    return "XO"[
+    return "12"[
         np.count_nonzero(state == "O") < np.count_nonzero(state == "X")]
 
 
@@ -40,12 +49,27 @@ def is_leaf(state):
 
 class Node:
 
-    def __init__(self, state):
-        self.state = state
+    def __init__(self):
+        self.grid = self.make_grid()
+        self.turn = CAT
         self.visit_count = 0
         self.score_total = 0
         self.score_estimate = 0
         self.child_list = None
+
+    def make_grid(self):
+        grid = np.array([[EMPTY] * SIZE] * SIZE)
+        grid[SIZE // 2 - 1:SIZE // 2 + 2, SIZE // 2] = WALL
+        grid[SIZE // 2, SIZE // 2 - 1:SIZE // 2 + 2] = WALL
+        grid = self.put_agents(grid)
+        return grid
+
+    def put_agents(self, g):
+        grid_copy = g.flatten()
+        pos = [i for i in range(len(grid_copy)) if grid_copy[i] == EMPTY]
+        m, c, t, h = np.random.choice(pos, size=4, replace=False)
+        grid_copy[m], grid_copy[c], grid_copy[t], grid_copy[h] = MOUSE, CAT, TRAP, HOLE
+        return grid_copy.reshape((SIZE, SIZE))
 
     def children(self):
         # Only generate children the first time they are requested and memoize
