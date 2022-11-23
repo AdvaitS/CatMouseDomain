@@ -7,7 +7,8 @@ dm.SIZE = SIZE
 state = dm.Node()
 
 print("Starting Grid: \n", dm.state_string(state.grid.astype(str)))
-
+print(state.grid)
+dm.valid_actions(state)
 # gauge sub-optimality with rollouts
 num_rollouts = 10000
 # node = dm.Node(grid)

@@ -1,11 +1,12 @@
 # MCTS Implementation
 import numpy as np
 
-EMPTY, CAT, MOUSE, WALL, TRAP, HOLE = list(range(6))
+EMPTY, CAT, MOUSE, WALL, TRAP, HOLE = [0., 1., 2., -1., 0.5, 0.7]
 SIZE = -1
 
 
-def state_string(state):
+def state_string(grid):
+    state = grid
     state[state == str(EMPTY)] = "_"
     state[state == str(CAT)] = "C"
     state[state == str(MOUSE)] = "M"
@@ -25,40 +26,82 @@ def score(state):
 
 
 def get_player(state):
-    return "12"[
-        np.count_nonzero(state == "O") < np.count_nonzero(state == "X")]
+    return state.turn
+
 
 
 def children_of(state):
-    symbol = get_player(state)
+    # symbol = get_player(state)
     children = []
-    for r in range(state.shape[0]):
-        for c in range(state.shape[1]):
-            if state[r, c] == "_":
-                child = state.copy()
-                child[r, c] = symbol
-                children.append(child)
+    grid, turn = state.grid, state.turn
+    actions = valid_actions(state)
+    for action in actions:
+        children.append(perform_action(action, grid, turn))
     return children
 
+
+def perform_action(action, g, turn):
+    grid = g
+    dx, dy = action
+    if turn == CAT:
+        px, py = self.cat_pos
+        grid[px, py] -= CAT
+        grid[px+dx, py+dy] += CAT
+        self.cat_pos = (px+dx, py+dy)
+        self.turn = MOUSE
+    else:
+        px, py = self.mouse_pos
+        if grid[px, py] == -(MOUSE+TRAP):
+            grid[px, py] = MOUSE+TRAP
+        grid[px, py] -= MOUSE
+        grid[px+dx, py+dy] += MOUSE
+        self.mouse_pos = (px+dx, py+dy)
+        self.turn = CAT
+    return grid
+
+
+
+def get_position(grid, player):
+    positions = np.where(grid == player)
+    return list(zip(positions[0], positions[1]))[0]
 
 def is_leaf(state):
     children = children_of(state)
     value = score(state)
     return len(children) == 0 or value != 0
 
+def valid_actions(state):
+    actions = []
+    grid, turn = state.grid, state.turn
+    px, py = get_position(grid, turn)
+    print(px, py)
+    if turn == MOUSE and grid[px, py] == MOUSE+TRAP:
+        grid[px, py] *= -1
+        return [(0, 0)]
+    if px < SIZE - 1 and grid[px+1, py] != WALL: actions.append((1, 0))                             #Down
+    if px > 0 and grid[px-1, py] != WALL: actions.append((-1, 0))                                   #Up
+    if py < SIZE - 1 and grid[px, py+1] != WALL: actions.append((0, 1))                             #Right
+    if py > 0 and grid[px, py-1] != WALL: actions.append((0, -1))                                   #Left
+    if px > 0 and py < SIZE - 1 and grid[px-1, py+1] != WALL: actions.append((-1, 1))               #NE
+    if px < SIZE - 1 and py < SIZE - 1 and grid[px+1, py+1] != WALL: actions.append((1, 1))         #SE
+    if px < SIZE - 1 and py > 0 and grid[px+1, py-1] != WALL: actions.append((1, -1))               #SW
+    if px > 0 and py > 0 and grid[px-1, py-1] != WALL: actions.append((-1, -1))                     #NW
+    return actions
 
 class Node:
 
     def __init__(self):
         self.grid = self.make_grid()
         self.turn = CAT
+        self.cat_pos = get_position(self.grid, CAT)
+        self.mouse_pos = get_position(self.grid, MOUSE)
         self.visit_count = 0
         self.score_total = 0
         self.score_estimate = 0
         self.child_list = None
 
     def make_grid(self):
-        grid = np.array([[EMPTY] * SIZE] * SIZE)
+        grid = np.zeros((SIZE, SIZE), dtype=float)
         grid[SIZE // 2 - 1:SIZE // 2 + 2, SIZE // 2] = WALL
         grid[SIZE // 2, SIZE // 2 - 1:SIZE // 2 + 2] = WALL
         grid = self.put_agents(grid)
@@ -74,7 +117,7 @@ class Node:
     def children(self):
         # Only generate children the first time they are requested and memoize
         if self.child_list is None:
-            self.child_list = list(map(Node, children_of(self.state)))
+            self.child_list = list(map(Node, self.children_of()))
         # Return the memoized child list thereafter
         return self.child_list
 
@@ -88,7 +131,7 @@ class Node:
         children = self.children()
 
         # negate utilities for min player "O"
-        sign = +1 if get_player(self.state) == "X" else -1
+        sign = +1 if self.turn == CAT else -1
 
         # empirical average child utilities
         # special case to handle 0 denominator for never-visited children
