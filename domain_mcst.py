@@ -4,6 +4,14 @@ import numpy as np
 EMPTY, CAT, MOUSE, WALL, TRAP, HOLE = [0., 1., 2., -1., 0.5, 0.7]
 SIZE = -1
 explored = set()
+#rollout_limit = 100
+
+def winner(state):
+    if state.mouse_pos == state.cat_pos:
+        return CAT
+    elif MOUSE+HOLE in state.grid:
+        return MOUSE
+    return -1
 
 def state_string(grid):
     state = grid
@@ -17,6 +25,7 @@ def state_string(grid):
     state[state == str(CAT+TRAP)] = "CT"
     state[state == str(CAT+HOLE)] = "CH"
     state[state == str(MOUSE + TRAP)] = "MT"
+    state[state == str(-(MOUSE + TRAP))] = "MT"
     state[state == str(MOUSE + HOLE)] = "MH"
     state[state == str(CAT+MOUSE+HOLE)] = "CMH"
     state[state == str(CAT+MOUSE+TRAP)] = "CMT"
@@ -35,7 +44,7 @@ def score(state):
     hposition = list(zip(hole_position[0], hole_position[1]))[0]
     return getdist(state.mouse_pos, hposition) - getdist(state.cat_pos, state.mouse_pos)
     """
-    if MOUSE+CAT in state.grid:
+    if state.cat_pos == state.mouse_pos:
         return 1
     if MOUSE+HOLE in state.grid:
         return -1
@@ -60,7 +69,7 @@ def children_of(state):
     #print("Valid Actions: ", actions)
     for action in actions:
         new_state = perform_action(action, grid, turn)
-        if tuple((new_state.cat_pos, new_state.mouse_pos)) not in explored:
+        if tuple((new_state.cat_pos, new_state.mouse_pos)) not in explored or (MOUSE+TRAP in new_state.grid) or (-(MOUSE+TRAP) in new_state.grid):
             children.append(new_state)
             explored.add(tuple((new_state.cat_pos, new_state.mouse_pos)))
     return children
@@ -79,8 +88,6 @@ def perform_action(action, g, turn):
         new_node.turn = MOUSE
     else:
         px, py = new_node.mouse_pos
-        if new_node.grid[px, py] == -(MOUSE + TRAP):
-            new_node.grid[px, py] = MOUSE + TRAP
         new_node.grid[px, py] -= MOUSE
         new_node.grid[px + dx, py + dy] += MOUSE
         new_node.mouse_pos = (px + dx, py + dy)
@@ -100,8 +107,8 @@ def make_grid():
 def put_agents(g):
     grid_copy = g.flatten()
     pos = [i for i in range(len(grid_copy)) if grid_copy[i] == EMPTY]
-    m, c, t, h = np.random.choice(pos, size=4, replace=False)
-    grid_copy[m], grid_copy[c], grid_copy[t], grid_copy[h] = MOUSE, CAT, TRAP, HOLE
+    m, c, t1, t2, t3, t4, h = np.random.choice(pos, size=7, replace=False)
+    grid_copy[m], grid_copy[c], grid_copy[t1], grid_copy[t2], grid_copy[t3], grid_copy[t4], grid_copy[h] = MOUSE, CAT, TRAP, TRAP, TRAP, TRAP, HOLE
     return grid_copy.reshape((SIZE, SIZE))
 
 
@@ -147,7 +154,11 @@ def valid_actions(state):
     #print(px, py)
     if turn == MOUSE and grid[px, py] == MOUSE + TRAP:
         grid[px, py] *= -1
+        state.grid = grid
         return [(0, 0)]
+    if turn == MOUSE and grid[px, py] == -(MOUSE+TRAP):
+        grid[px, py] *= -1
+        state.grid = grid
     if px < SIZE - 1 and grid[px + 1, py] != WALL: actions.append((1, 0))  # Down
     if px > 0 and grid[px - 1, py] != WALL: actions.append((-1, 0))  # Up
     if py < SIZE - 1 and grid[px, py + 1] != WALL: actions.append((0, 1))  # Right
@@ -224,11 +235,12 @@ def uct(node):
 choose_child = uct
 
 
-def rollout(node):
-    if is_leaf(node) or node.children() == []:
+def rollout(node, rollout_limit=100):
+    if is_leaf(node) or node.children() == [] or rollout_limit <= 0:
         result = score(node)
     else:
-        result = rollout(choose_child(node))
+        rollout_limit -= 1
+        result = rollout(choose_child(node), rollout_limit)
     node.visit_count += 1
     node.score_total += result
     node.score_estimate = node.score_total / node.visit_count
