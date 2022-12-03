@@ -1,52 +1,58 @@
 # MCTS Implementation
 import numpy as np
 
-EMPTY, CAT, MOUSE, WALL, TRAP, HOLE = [0., 1., 2., -1., 0.5, 0.7]
+EMPTY, CAT, MOUSE, WALL, TRAP, HOLE = [0, 1, 2, 3, 4, 5]
 SIZE = -1
-explored = set()
-#rollout_limit = 100
+explored = {}
+rollouts_visited = {}
+rollouts = []
+
 
 def winner(state):
     if state.mouse_pos == state.cat_pos:
         return CAT
-    elif MOUSE+HOLE in state.grid:
+    elif state.mouse_pos == tuple(np.argwhere(state.grid[HOLE] == 1)[0]):
         return MOUSE
     return -1
 
+
 def state_string(grid):
-    state = grid
-    state[state == str(EMPTY)] = "_"
-    state[state == str(CAT)] = "C"
-    state[state == str(MOUSE)] = "M"
-    state[state == str(WALL)] = "W"
-    state[state == str(TRAP)] = "T"
-    state[state == str(HOLE)] = "H"
-    state[state == str(CAT+MOUSE)] = "CM"
-    state[state == str(CAT+TRAP)] = "CT"
-    state[state == str(CAT+HOLE)] = "CH"
-    state[state == str(MOUSE + TRAP)] = "MT"
-    state[state == str(-(MOUSE + TRAP))] = "MT"
-    state[state == str(MOUSE + HOLE)] = "MH"
-    state[state == str(CAT+MOUSE+HOLE)] = "CMH"
-    state[state == str(CAT+MOUSE+TRAP)] = "CMT"
+    state = np.empty(grid[EMPTY].shape, dtype="<U10")
+    for i in range(SIZE):
+        for j in range(SIZE):
+            if grid[EMPTY][i, j] == 1: state[i, j] = "_"
+            if grid[WALL][i, j] == 1: state[i, j] = "W"
+            if grid[TRAP][i, j] != 0: state[i, j] = "T"
+            if grid[HOLE][i, j] == 1: state[i, j] = "H"
+            if grid[CAT][i, j] == 1: state[i, j] += "C"
+            if grid[MOUSE][i, j] == 1: state[i, j] += "M"
     return "\n".join(["  ".join(row) for row in state])
+
+def get_actions(state):
+    next_states = state.children()
+    actions = []
+    if state.turn == CAT: px, py = state.cat_pos
+    else: px, py = state.mouse_pos
+    for child in next_states:
+        if state.turn == CAT: ix, iy = child.cat_pos
+        else: ix, iy = child.mouse_pos
+        if px - ix == 1 and py - iy == 0: actions.append("Upward")
+        elif px - ix == 1 and py - iy == 1: actions.append("Upward Left")
+        elif px - ix == 1 and py - iy == -1: actions.append("Upward Right")
+        elif px - ix == -1 and py - iy == 0: actions.append("Downward")
+        elif px - ix == -1 and py - iy == 1: actions.append("Downward Left")
+        elif px - ix == -1 and py - iy == -1: actions.append("Downward Right")
+        elif px - ix == 0 and py - iy == 0: actions.append("Stay")
+        elif px - ix == 0 and py - iy == 1: actions.append("Left")
+        elif px - ix == 0 and py - iy == -1: actions.append("Right")
+    return actions
 
 
 def score(state):
-    """
-    grid, turn = state.grid, state.turn
-    if HOLE in grid:
-        hole_position = np.where(grid == HOLE)
-    elif MOUSE + HOLE in grid:
-        hole_position = np.where(grid == MOUSE+HOLE)
-    else:
-        hole_position = np.where(grid == MOUSE+TRAP)
-    hposition = list(zip(hole_position[0], hole_position[1]))[0]
-    return getdist(state.mouse_pos, hposition) - getdist(state.cat_pos, state.mouse_pos)
-    """
     if state.cat_pos == state.mouse_pos:
         return 1
-    if MOUSE+HOLE in state.grid:
+    hole_pos = tuple(np.argwhere(state.grid[HOLE] == 1)[0])
+    if state.mouse_pos == hole_pos:
         return -1
     return 0
 
@@ -57,116 +63,89 @@ def getdist(p1, p2):
     return max(np.fabs(x1 - x2), np.fabs(y1 - y2))
 
 
-def get_player(state):
-    return state.turn
-
-
-def children_of(state):
-    # symbol = get_player(state)
+def children_of(state, r=False):
     children = []
     grid, turn = state.grid, state.turn
     actions = valid_actions(state)
-    #print("Valid Actions: ", actions)
     for action in actions:
-        new_state = perform_action(action, grid, turn)
-        if tuple((new_state.cat_pos, new_state.mouse_pos)) not in explored or (MOUSE+TRAP in new_state.grid) or (-(MOUSE+TRAP) in new_state.grid):
-            children.append(new_state)
-            explored.add(tuple((new_state.cat_pos, new_state.mouse_pos)))
+        node = get_node(action, grid, turn)
+        traps = list(map(tuple, np.argwhere(grid[TRAP] != 0)))
+        condition = get_explored_condition(r, node, traps)
+        if condition:
+            children.append(node)
     return children
 
 
-def perform_action(action, g, turn):
+def get_explored_condition(r, node, traps):
+    if node.mouse_pos in traps:
+        return True
+    elif r is True and (tuple((node.cat_pos, node.mouse_pos)) not in rollouts_visited.keys()):
+        return True
+    elif r is False and (tuple((node.cat_pos, node.mouse_pos)) not in explored.keys()):
+        return True
+    return False
+
+
+def get_node(action, g, turn):
     grid = g.copy()
     dx, dy = action
-    new_node = Node(grid, turn)
-    #print("Performing action ({0}, {1}) for {2}".format(dx, dy, turn))
-    if turn == CAT:
-        px, py = new_node.cat_pos
-        new_node.grid[px, py] -= CAT
-        new_node.grid[px + dx, py + dy] += CAT
-        new_node.cat_pos = (px + dx, py + dy)
-        new_node.turn = MOUSE
+    px, py = tuple(np.argwhere(grid[turn] == 1)[0])
+    grid[turn][px, py] = 0
+    grid[turn][px + dx, py + dy] = 1
+    grid[EMPTY][px, py] = 1
+    grid[EMPTY][px + dx, py + dy] = 0
+    if turn == MOUSE:
+        new_node = Node(grid, CAT)
     else:
-        px, py = new_node.mouse_pos
-        new_node.grid[px, py] -= MOUSE
-        new_node.grid[px + dx, py + dy] += MOUSE
-        new_node.mouse_pos = (px + dx, py + dy)
-        new_node.turn = CAT
-    #print(new_node.grid)
+        new_node = Node(grid, MOUSE)
     return new_node
 
 
 def make_grid():
-    grid = np.zeros((SIZE, SIZE), dtype=float)
-    grid[SIZE // 2 - 1:SIZE // 2 + 2, SIZE // 2] = WALL
-    grid[SIZE // 2, SIZE // 2 - 1:SIZE // 2 + 2] = WALL
+    grid = np.zeros((6, SIZE, SIZE), dtype=float)
+    grid[WALL][SIZE // 2 - 1:SIZE // 2 + 2, SIZE // 2] = 1
+    grid[WALL][SIZE // 2, SIZE // 2 - 1:SIZE // 2 + 2] = 1
+    grid[EMPTY][grid[WALL] == 0] = 1
     grid = put_agents(grid)
     return grid
 
 
 def put_agents(g):
-    grid_copy = g.flatten()
-    pos = [i for i in range(len(grid_copy)) if grid_copy[i] == EMPTY]
-    m, c, t1, t2, t3, t4, h = np.random.choice(pos, size=7, replace=False)
-    grid_copy[m], grid_copy[c], grid_copy[t1], grid_copy[t2], grid_copy[t3], grid_copy[t4], grid_copy[h] = MOUSE, CAT, TRAP, TRAP, TRAP, TRAP, HOLE
-    return grid_copy.reshape((SIZE, SIZE))
-
-
-def get_position(grid, player):
-    if player == CAT:
-        if CAT in grid:
-            positions = np.where(grid == CAT)
-        elif CAT + HOLE in grid:
-            positions = np.where(grid == CAT + HOLE)
-        elif CAT + TRAP in grid:
-            positions = np.where(grid == CAT + TRAP)
-        elif CAT + MOUSE + TRAP in grid:
-            positions = np.where(grid == CAT + MOUSE + TRAP)
-        else:
-            positions = np.where(grid == CAT + MOUSE + HOLE)
-    else:
-        if MOUSE in grid:
-            positions = np.where(grid == MOUSE)
-        elif MOUSE + HOLE in grid:
-            positions = np.where(grid == MOUSE + HOLE)
-        elif MOUSE+TRAP in grid:
-            positions = np.where(grid == MOUSE + TRAP)
-        elif -(MOUSE+TRAP) in grid:
-            positions = np.where(grid == -(MOUSE + TRAP))
-        elif CAT + MOUSE + TRAP in grid:
-            positions = np.where(grid == CAT + MOUSE + TRAP)
-        else:
-            positions = np.where(grid == CAT + MOUSE + HOLE)
-    #print("Position of {0}: {1}".format(player, positions))
-    return list(zip(positions[0], positions[1]))[0]  # np.array([x],[y]) -> (x, y)
+    grid_cat, grid_mouse, grid_traps, grid_hole, grid_empty = g[CAT].flatten(), g[MOUSE].flatten(), g[TRAP].flatten(), \
+                                                              g[HOLE].flatten(), g[EMPTY].flatten()
+    pos = [i for i in range(len(grid_empty)) if grid_empty[i] == 1]
+    m, c, t1, t2, t3, h = np.random.choice(pos, size=6, replace=False)
+    grid_mouse[m], grid_cat[c], grid_traps[t1], grid_traps[t2], grid_traps[t3], grid_hole[h] = np.ones(6)
+    grid_empty[m], grid_empty[c], grid_empty[t1], grid_empty[t2], grid_empty[t3], grid_empty[h] = np.zeros(6)
+    g[EMPTY], g[CAT], g[MOUSE], g[TRAP], g[HOLE] = grid_empty.reshape((SIZE, SIZE)), grid_cat.reshape(
+        (SIZE, SIZE)), grid_mouse.reshape((SIZE, SIZE)), grid_traps.reshape((SIZE, SIZE)), grid_hole.reshape(
+        (SIZE, SIZE))
+    return g
 
 
 def is_leaf(state):
-    #children = children_of(state)
-    #value = score(state)
     return score(state) != 0
 
 
 def valid_actions(state):
     actions = []
     grid, turn = state.grid, state.turn
-    px, py = get_position(grid, turn)
-    #print(px, py)
-    if turn == MOUSE and grid[px, py] == MOUSE + TRAP:
-        grid[px, py] *= -1
+    px, py = tuple(np.argwhere(grid[turn] == 1)[0])
+    if turn == MOUSE and grid[TRAP][px, py] == 1:
+        grid[TRAP][px, py] = -1
         state.grid = grid
         return [(0, 0)]
-    if turn == MOUSE and grid[px, py] == -(MOUSE+TRAP):
-        grid[px, py] *= -1
+    if turn == MOUSE and grid[TRAP][px, py] == -1:
+        grid[TRAP][px, py] = 1
         state.grid = grid
-    if px < SIZE - 1 and grid[px + 1, py] != WALL: actions.append((1, 0))  # Down
-    if px > 0 and grid[px - 1, py] != WALL: actions.append((-1, 0))  # Up
-    if py < SIZE - 1 and grid[px, py + 1] != WALL: actions.append((0, 1))  # Right
-    if py > 0 and grid[px, py - 1] != WALL: actions.append((0, -1))  # Left
-    if px > 0 and py < SIZE - 1 and grid[px - 1, py + 1] != WALL: actions.append((-1, 1))  # NE
-    if px < SIZE - 1 and py < SIZE - 1 and grid[px + 1, py + 1] != WALL: actions.append((1, 1))  # SE
-    if px < SIZE - 1 and py > 0 and grid[px + 1, py - 1] != WALL: actions.append((1, -1))  # SW
-    if px > 0 and py > 0 and grid[px - 1, py - 1] != WALL: actions.append((-1, -1))  # NW
+    if px < SIZE - 1 and grid[WALL][px + 1, py] != 1: actions.append((1, 0))  # Down
+    if px > 0 and grid[WALL][px - 1, py] != 1: actions.append((-1, 0))  # Up
+    if py < SIZE - 1 and grid[WALL][px, py + 1] != 1: actions.append((0, 1))  # Right
+    if py > 0 and grid[WALL][px, py - 1] != 1: actions.append((0, -1))  # Left
+    if px > 0 and py < SIZE - 1 and grid[WALL][px - 1, py + 1] != 1: actions.append((-1, 1))  # NE
+    if px < SIZE - 1 and py < SIZE - 1 and grid[WALL][px + 1, py + 1] != 1: actions.append((1, 1))  # SE
+    if px < SIZE - 1 and py > 0 and grid[WALL][px + 1, py - 1] != 1: actions.append((1, -1))  # SW
+    if px > 0 and py > 0 and grid[WALL][px - 1, py - 1] != 1: actions.append((-1, -1))  # NW
     return actions
 
 
@@ -175,73 +154,58 @@ class Node:
     def __init__(self, grid, turn):
         self.grid = grid  # self.make_grid()
         self.turn = turn  # CAT
-        self.cat_pos = get_position(self.grid, CAT)
-        self.mouse_pos = get_position(self.grid, MOUSE)
+        self.cat_pos = tuple(np.argwhere(grid[CAT] == 1)[0])
+        self.mouse_pos = tuple(np.argwhere(grid[MOUSE] == 1)[0])
         self.visit_count = 0
         self.score_total = 0
         self.score_estimate = 0
         self.child_list = None
 
-    def children(self):
-        # Only generate children the first time they are requested and memoize
+    def children(self, rt=False):
         if self.child_list is None:
-            self.child_list = list(children_of(self))
-        # Return the memoized child list thereafter
-        return self.child_list #[child for child in self.child_list if tuple((child.cat_pos, child.mouse_pos)) not in explored]  #node.children()[np.argmax(U)]
+            self.child_list = list(children_of(self, rt))
+        return self.child_list
 
-    # Helper to collect child visit counts into a list
-    def N_values(self):
-        return [c.visit_count for c in self.children()]
+    def N_values(self, rt=False):
+        return [c.visit_count for c in self.children(rt)]
 
-    # Helper to collect child estimated utilities into a list
-    # Utilities are from the current player's perspective
-    def Q_values(self):
-        children = self.children()
-
-        # negate utilities for min player "O"
+    def Q_values(self, rt=False):
+        children = self.children(rt)
         sign = +1 if self.turn == CAT else -1
-
-        # empirical average child utilities
-        # special case to handle 0 denominator for never-visited children
         Q = [sign * c.score_total / (c.visit_count + 1) for c in children]
-        # Q = [sign * c.score_total / max(c.visit_count, 1) for c in children]
-
         return Q
 
 
-# exploit strategy: choose the best child for the current player
 def exploit(node):
-    return node.children()[np.argmax(node.Q_values())]
+    child = node.children()[np.argmax(node.Q_values())]
+    return child
 
 
-# explore strategy: choose the least-visited child
-def explore(node):
-    return node.children()[np.argmin(node.N_values())]  # TODO: replace with exploration
+def random_choice(node):
+    return np.random.choice(node.children())
 
 
-# upper-confidence bound strategy
 def uct(node):
-    # max_c Qc + sqrt(ln(Np) / Nc)
-    Q = np.array(node.Q_values())
-    N = np.array(node.N_values())
-    U = Q + np.sqrt(np.log(node.visit_count + 1) / (N + 1))  # +1 for 0 edge case
-    #print("UCT:\n", node.children()[np.argmax(U)].grid)
-
-    return node.children()[np.argmax(U)]
+    Q = np.array(node.Q_values(True))
+    N = np.array(node.N_values(True))
+    U = Q + np.sqrt(np.log(node.visit_count + 1) / (N + 1))
+    child = node.children(True)[np.argmax(U)]
+    return child
 
 
-# choose_child = exploit
-# choose_child = explore
 choose_child = uct
 
 
 def rollout(node, rollout_limit=100):
-    if is_leaf(node) or node.children() == [] or rollout_limit <= 0:
+    rollouts_visited[tuple((node.cat_pos, node.mouse_pos))] = node.score_estimate
+    if is_leaf(node) or node.children(True) == [] or rollout_limit <= 0:
         result = score(node)
+        rollouts.append(100 - rollout_limit)
     else:
         rollout_limit -= 1
         result = rollout(choose_child(node), rollout_limit)
     node.visit_count += 1
     node.score_total += result
     node.score_estimate = node.score_total / node.visit_count
+    rollouts_visited[tuple((node.cat_pos, node.mouse_pos))] = node.score_estimate
     return result
