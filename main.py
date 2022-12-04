@@ -47,7 +47,6 @@ def cat_vs_mouse(state, gametype):
         moves += 1
         dm.explored[tuple((curr_state.cat_pos, curr_state.mouse_pos))] = curr_state.score_estimate
         print(dm.state_string(curr_state.grid))
-        print(dm.rollouts)
         number_of_nodes += sum(dm.rollouts)
     print("GAME OVER")
     print("Moves: ", moves)
