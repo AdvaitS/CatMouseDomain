@@ -39,21 +39,10 @@ def generate_data(board_size, num_games):
     return tuple((tr.tensor(np.array(states), dtype=tr.float), tr.tensor(np.array(results), dtype=tr.float)))
 
 
-def augment(all_states, results):
-    augmented_grids = []
-    augmented_scores = []
-    for STATE, RESULT in zip(all_states, results):
-        for k in range(4):
-            rot = tr.rot90(STATE, k)
-            augmented_grids.append(rot)
-            augmented_grids.append(tr.fliplr(rot))
-        augmented_scores += [RESULT] * 8
-    return tuple((augmented_grids, augmented_scores))
-
 
 def train_nn():
-    training_examples = generate_data(board_size=6, num_games=10)
-    testing_examples = generate_data(board_size=6, num_games=2)
+    training_examples = generate_data(board_size=6, num_games=1)
+    testing_examples = generate_data(board_size=6, num_games=1)
 
     training_examples = (training_examples[0], training_examples[1])
     testing_examples = (testing_examples[0], testing_examples[1])
@@ -91,7 +80,7 @@ def train_nn():
        tr.nn.Linear(160, 1),
     ).to(device)
 
-    net = lin_lin                                               #To change NN, set this value to one of [conv_lin, lin, lin_lin]
+    net = conv_lin                                               #To change NN, set this value to one of [conv_lin, lin, lin_lin]
     optimizer = tr.optim.SGD(net.parameters(), lr=0.0006)
 
     states, utilities = training_examples
@@ -130,5 +119,6 @@ def train_nn():
     pt.savefig('lin_lin_0006.png')
 
 
-train_nn()
+if __name__ == '__main__':
+    train_nn()
 

@@ -40,11 +40,11 @@ performance, node_count = nn_tree()
 
 print(performance, node_count)
 
-figure, axis = plt.subplots(1, 2)
+figure, axis = plt.subplots(1, 2, figsize=(15,15))
 figure.suptitle('NN + Tree')
 
 axis[0].hist(node_count,
-                bins=np.arange(min(node_count) - 1000, max(node_count) + 10000, sum(node_count) / len(node_count)))
+                bins=np.arange(min(node_count) - 1000, max(node_count) + 1000, sum(node_count) / len(node_count)))
 axis[0].set_title('Nodes')
 axis[0].set_xlabel('Number of Nodes')
 axis[0].set_ylabel('Frequency')
@@ -55,4 +55,4 @@ axis[1].set_xlabel('Performance')
 axis[1].set_ylabel('Frequency')
 
 figure.subplots_adjust(wspace=0.5, hspace=0.5)
-figure.savefig('nntree_6.jpg')
+figure.savefig('nntree_6_conv_lin_001.jpg')

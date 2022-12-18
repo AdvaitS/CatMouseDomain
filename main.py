@@ -3,7 +3,7 @@ import domain_mcst as dm
 
 
 num_rollouts = 100
-"""
+
 game_type = int(input("Tree Games:\n1. Optimal Cat vs Optimal Mouse\n2. Optimal Cat vs Sub-Optimal "
                       "Mouse\n3. Sub-Optimal Cat vs Optimal Mouse\n4. Sub-Optimal Cat vs Sub-Optimal Mouse\nNN+Tree "
                       "Games: (Size = 6)\n5. Optimal Cat vs Optimal Mouse\n6. Optimal Cat vs Sub-Optimal Mouse "
@@ -23,7 +23,7 @@ print("Performing initial rollouts...")
 for r in range(num_rollouts * 10):
     dm.rollouts_visited = {}
     dm.rollout(state)
-"""
+
 
 def cat_vs_mouse(state, gametype):
     moves = 0
@@ -140,7 +140,7 @@ def interactive_cat(state):
         dist = dm.getdist(state.mouse_pos, tuple(np.argwhere(state.grid[dm.HOLE] == 1)[0]))
     print("Performance: ", (sign * dist) / moves)
 
-"""
+
 if game_type in [1, 2, 3, 4, 5, 6]:
     cat_vs_mouse(state, game_type)
 elif game_type == 7:
@@ -149,4 +149,3 @@ elif game_type == 8:
     interactive_cat(state)
 else:
     print("Invalid Input")
-"""

@@ -202,9 +202,10 @@ def nn_exploit(node):
 
     # To change NN, use any of the functions defined in mcst_nn.py (lin_lin_0006(), lin_lin_0001(), lin_0005(), conv_lin_001())
     model = models.lin_lin_0006()
-    mchild, m = None, 0
+    mchild, m = children[0], 0
     for child in children:
         child.score_estimate = model(tr.tensor(child.grid, dtype=tr.float).reshape(1, 216))[0]
+        #child.score_estimate = model(tr.tensor(child.grid, dtype=tr.float).reshape(6, 36))[0]
         if child.score_estimate > m:
             mchild = child
 
