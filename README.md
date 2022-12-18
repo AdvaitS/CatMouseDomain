@@ -37,3 +37,6 @@ link : https://colab.research.google.com/drive/1JuNdI_zcT35MWSY4-h_2ZgH7IBe2TRYd
 The neural network architectures have been refered from the class colab notebooks and PyTorch Documentation:
 https://colab.research.google.com/drive/1zHTZyqZoOq4Hqx5oGl1rPFVnanB_IBUF?usp=sharing#scrollTo=bhEjp3zUoTUN
 https://colab.research.google.com/drive/1QF8IJHlZ597esIU-vmW7u9KARhyXIjOY?usp=sharing#scrollTo=txiloxBPJnVM
+
+The remaining .png, .jpg files are performance evaluation results.
+The params_<>.txt files have the weights and biases saved for the different trained models.
