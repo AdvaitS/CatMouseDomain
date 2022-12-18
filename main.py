@@ -1,26 +1,30 @@
 import numpy as np
 import domain_mcst as dm
 
+
 num_rollouts = 100
 """
-SIZE = int(input("Select a grid size: 6, 7, 8, 9, 10\nChoice: "))
-dm.SIZE = SIZE
-state = dm.Node(dm.make_grid(), dm.CAT)
+game_type = int(input("Tree Games:\n1. Optimal Cat vs Optimal Mouse\n2. Optimal Cat vs Sub-Optimal "
+                      "Mouse\n3. Sub-Optimal Cat vs Optimal Mouse\n4. Sub-Optimal Cat vs Sub-Optimal Mouse\nNN+Tree "
+                      "Games: (Size = 6)\n5. Optimal Cat vs Optimal Mouse\n6. Optimal Cat vs Sub-Optimal Mouse "
+                      "\n7. Optimal Cat vs Interactive Mouse\n8. Interactive Cat vs Optimal Mouse\n\nEnter Choice: "))
+if game_type in [5, 6]:
+    dm.SIZE = 6
+else:
+    SIZE = int(input("Select a grid size: 6, 7, 8, 9, 10\nChoice: "))
+    dm.SIZE = SIZE
 
+state = dm.Node(dm.make_grid(), dm.CAT)
 
 print("Initial State:")
 print(dm.state_string(state.grid))
 
 print("Performing initial rollouts...")
-for r in range(num_rollouts*10):
+for r in range(num_rollouts * 10):
     dm.rollouts_visited = {}
     dm.rollout(state)
-print(dm.rollouts)
-game_type = int(input("Tree Games:\n1. Optimal Cat vs Optimal Mouse\n2. Optimal Cat vs Sub-Optimal "
-                      "Mouse\n3. Sub-Optimal Cat vs Optimal Mouse\n4. Sub-Optimal Cat vs Sub-Optimal Mouse\n5. "
-                      "Optimal Cat vs Interactive Mouse\n6. Interactive Cat vs Optimal Mouse\nEnter Choice: "))
-
 """
+
 def cat_vs_mouse(state, gametype):
     moves = 0
     curr_state = state
@@ -29,15 +33,25 @@ def cat_vs_mouse(state, gametype):
     strategies = {1: (dm.exploit, dm.exploit),
                   2: (dm.exploit, dm.random_choice),
                   3: (dm.random_choice, dm.exploit),
-                  4: (dm.random_choice, dm.random_choice)}
+                  4: (dm.random_choice, dm.random_choice),
+                  5: (dm.exploit, dm.exploit),
+                  6: (dm.exploit, dm.random_choice)}
     cat_strategy, mouse_strategy = strategies[gametype]
     flag = strategies[gametype] != 4
     while not dm.is_leaf(curr_state) and moves <= 100 and curr_state.children() != []:
         if flag:
             dm.rollouts = []
+            if gametype in [5, 6]:
+                nn = True
+            else:
+                nn = False
             for r in range(num_rollouts):
                 dm.rollouts_visited = {}
-                dm.rollout(curr_state)
+                dm.rollout(curr_state, nn)
+        if moves > 10 and gametype == 5:
+            cat_strategy, mouse_strategy = dm.nn_exploit, dm.nn_exploit
+        elif moves > 10 and gametype == 6:
+            cat_strategy = dm.nn_exploit
         if curr_state.turn == dm.CAT:
             print("Cat's Move")
             curr_state = cat_strategy(curr_state)
@@ -69,7 +83,7 @@ def interactive_mouse(state):
     while not dm.is_leaf(curr_state):
         for r in range(num_rollouts):
             dm.rollouts_visited = {}
-            dm.rollout(curr_state)
+            dm.rollout(curr_state, nn=True)
         if curr_state.turn == dm.CAT:
             print("Cat's Move")
             curr_state = dm.exploit(curr_state)
@@ -101,7 +115,7 @@ def interactive_cat(state):
     while not dm.is_leaf(curr_state):
         for r in range(num_rollouts):
             dm.rollouts_visited = {}
-            dm.rollout(curr_state)
+            dm.rollout(curr_state, nn=True)
         if curr_state.turn == dm.CAT:
             print("Cat's Move")
             print("Valid Actions: ", dm.get_actions(curr_state))
@@ -127,11 +141,11 @@ def interactive_cat(state):
     print("Performance: ", (sign * dist) / moves)
 
 """
-if game_type in [1, 2, 3, 4]:
+if game_type in [1, 2, 3, 4, 5, 6]:
     cat_vs_mouse(state, game_type)
-elif game_type == 5:
+elif game_type == 7:
     interactive_mouse(state)
-elif game_type == 6:
+elif game_type == 8:
     interactive_cat(state)
 else:
     print("Invalid Input")

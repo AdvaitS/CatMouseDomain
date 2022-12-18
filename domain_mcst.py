@@ -1,5 +1,7 @@
 # MCTS Implementation
 import numpy as np
+import mcst_nn as models
+import torch as tr
 
 EMPTY, CAT, MOUSE, WALL, TRAP, HOLE = [0, 1, 2, 3, 4, 5]
 SIZE = -1
@@ -28,23 +30,37 @@ def state_string(grid):
             if grid[MOUSE][i, j] == 1: state[i, j] += "M"
     return "\n".join(["  ".join(row) for row in state])
 
+
 def get_actions(state):
     next_states = state.children()
     actions = []
-    if state.turn == CAT: px, py = state.cat_pos
-    else: px, py = state.mouse_pos
+    if state.turn == CAT:
+        px, py = state.cat_pos
+    else:
+        px, py = state.mouse_pos
     for child in next_states:
-        if state.turn == CAT: ix, iy = child.cat_pos
-        else: ix, iy = child.mouse_pos
-        if px - ix == 1 and py - iy == 0: actions.append("Upward")
-        elif px - ix == 1 and py - iy == 1: actions.append("Upward Left")
-        elif px - ix == 1 and py - iy == -1: actions.append("Upward Right")
-        elif px - ix == -1 and py - iy == 0: actions.append("Downward")
-        elif px - ix == -1 and py - iy == 1: actions.append("Downward Left")
-        elif px - ix == -1 and py - iy == -1: actions.append("Downward Right")
-        elif px - ix == 0 and py - iy == 0: actions.append("Stay")
-        elif px - ix == 0 and py - iy == 1: actions.append("Left")
-        elif px - ix == 0 and py - iy == -1: actions.append("Right")
+        if state.turn == CAT:
+            ix, iy = child.cat_pos
+        else:
+            ix, iy = child.mouse_pos
+        if px - ix == 1 and py - iy == 0:
+            actions.append("Upward")
+        elif px - ix == 1 and py - iy == 1:
+            actions.append("Upward Left")
+        elif px - ix == 1 and py - iy == -1:
+            actions.append("Upward Right")
+        elif px - ix == -1 and py - iy == 0:
+            actions.append("Downward")
+        elif px - ix == -1 and py - iy == 1:
+            actions.append("Downward Left")
+        elif px - ix == -1 and py - iy == -1:
+            actions.append("Downward Right")
+        elif px - ix == 0 and py - iy == 0:
+            actions.append("Stay")
+        elif px - ix == 0 and py - iy == 1:
+            actions.append("Left")
+        elif px - ix == 0 and py - iy == -1:
+            actions.append("Right")
     return actions
 
 
@@ -181,6 +197,20 @@ def exploit(node):
     return child
 
 
+def nn_exploit(node):
+    children = node.children()
+
+    # To change NN, use any of the functions defined in mcst_nn.py (lin_lin_0006(), lin_lin_0001(), lin_0005(), conv_lin_001())
+    model = models.lin_lin_0006()
+    mchild, m = None, 0
+    for child in children:
+        child.score_estimate = model(tr.tensor(child.grid, dtype=tr.float).reshape(1, 216))[0]
+        if child.score_estimate > m:
+            mchild = child
+
+    return mchild
+
+
 def random_choice(node):
     return np.random.choice(node.children())
 
@@ -196,11 +226,14 @@ def uct(node):
 choose_child = uct
 
 
-def rollout(node, rollout_limit=100):
+def rollout(node, rollout_limit=100, nn=False):
     rollouts_visited[tuple((node.cat_pos, node.mouse_pos))] = node.score_estimate
     if is_leaf(node) or node.children(True) == [] or rollout_limit <= 0:
         result = score(node)
         rollouts.append(100 - rollout_limit)
+    elif rollout_limit < 50 and nn:
+        rollout_limit -= 1
+        result = rollout(nn_exploit(node), rollout_limit)
     else:
         rollout_limit -= 1
         result = rollout(choose_child(node), rollout_limit)
