@@ -1,5 +1,5 @@
 # CatMouseDomain
-Dependencies: Python3, numpy, matplotlib
+Dependencies: Python3, PyTorch, numpy, matplotlib
 
 Execution instructions -
 To view / play the game, run main.py and the outputs will be generated on the console.
